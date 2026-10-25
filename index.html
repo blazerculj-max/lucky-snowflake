@@ -187,6 +187,10 @@ textarea:focus{outline:2px solid var(--gecko);outline-offset:1px}
 .setting:first-child{border-top:0;padding-top:4px}
 .setting > div{display:grid;gap:3px;min-width:0}
 .setting b{font-size:16px}
+.setting > .setting-actions{display:flex;gap:8px;flex-wrap:wrap;flex:none}
+.import-confirm{display:grid;gap:10px;margin:0 0 14px;padding:14px 16px;border:1px solid rgba(242,205,60,.4);border-radius:14px}
+.import-confirm p{margin:0;font-size:14px;line-height:1.5}
+.import-confirm .setting-actions{display:flex;gap:8px;flex-wrap:wrap}
 .setting span{font-size:14px;line-height:1.45;color:var(--muted)}
 .switch{flex:none;appearance:none;position:relative;width:52px;height:30px;padding:0;border:1px solid var(--line);border-radius:99px;background:rgba(255,255,255,.08);cursor:pointer;transition:background .2s}
 .switch i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--ink);transition:transform .2s}
@@ -387,6 +391,15 @@ body.nightlight #slot{margin:0}
           <div><b>Odraščanje</b><span id="ageNote"></span></div>
           <button class="ghost-btn" id="s-restart" type="button">Začni kot mladič</button>
         </div>
+        <div class="setting">
+          <div><b>Varnostna kopija</b><span>Napredek, dnevnik, spomine in svečko shrani v datoteko in jih z uvozom preneseš na drugo napravo ali brskalnik.</span></div>
+          <div class="setting-actions"><button class="ghost-btn" id="s-export" type="button">Izvozi</button><button class="ghost-btn" id="s-import" type="button">Uvozi</button></div>
+        </div>
+        <div class="import-confirm" id="importConfirm" hidden>
+          <p id="importSummary"></p>
+          <div class="setting-actions"><button class="primary sm" id="s-import-yes" type="button">Zamenjaj napredek</button><button class="ghost-btn" id="s-import-no" type="button">Prekliči</button></div>
+        </div>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
     </div>
   </section>
@@ -2326,6 +2339,7 @@ async function renderMemories() {
     li.appendChild(meta); list.appendChild(li);
   }
 }
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function memErr(err, what) {
   const code = err && err.code;
   if (code === 'invalid_argument') { mem.readOnly = true; toast(`Spomina ni bilo mogoče ${what}: za pisanje v to igro nimaš dovoljenja.`); renderMemories(); }
@@ -2348,7 +2362,7 @@ $('#memForm').addEventListener('submit', async e => {
   e.preventDefault();
   const text = $('#memText').value.trim();
   if (!text || mem.writing || !mem.ready) return;
-  const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: text.slice(0, 600), at: Date.now() };
+  const entry = { id: newId(), text: text.slice(0, 600), at: Date.now() };
   mem.writing = true; $('#memSave').disabled = true;
   try {
     if (mem.db) {
@@ -2426,6 +2440,91 @@ async function lightCandle() {
 }
 $('#b-candle').addEventListener('click', lightCandle);
 $('#b-candle-title').addEventListener('click', () => openMenu('memories'));
+
+/* ---------------- backup file ---------------- */
+// One JSON file with the game save, the memories and this viewer's candle, to move Lucky to another device.
+function backupData() {
+  const mine = myCandle();
+  return {
+    app: 'lucky-snowflake', format: 1, exported: new Date().toISOString(),
+    save: serialize(),
+    memories: mem.entries.map(({ text, at }) => ({ text, at })),
+    candle: { count: mine.count, last: mine.last },
+  };
+}
+async function exportBackup() {
+  save();
+  const data = JSON.stringify(backupData(), null, 2), d = new Date();
+  const filename = `lucky-snowflake-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.json`;
+  const c = window.claude;
+  const dl = c && typeof c.use === 'function' ? await c.use('downloads') : null;
+  if (dl) {
+    try { await dl.save({ filename, data }); toast('Varnostna kopija je shranjena.', 'good'); }
+    catch (err) {
+      const code = err && err.code;
+      if (code === 'declined') return;
+      toast(code === 'rate_limited' ? 'Shranjevanje že čaka na tvojo potrditev.' : 'Varnostne kopije ni bilo mogoče shraniti.');
+    }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  toast(c ? 'Če se prenos ni začel, izvozi na spletni strani igre: blazerculj-max.github.io/lucky-snowflake' : `Varnostna kopija je med prenosi: ${filename}`, 'good', 6500);
+}
+let pendingImport = null;
+function readBackup(file) {
+  file.text().then(text => {
+    let d = null;
+    try { d = JSON.parse(text); } catch (e) { d = null; }
+    if (!d || d.app !== 'lucky-snowflake' || !d.save || d.save.v !== 1) { toast('To ni varnostna kopija igre Lucky Snowflake.'); return; }
+    pendingImport = d;
+    const s = d.save, nm = Array.isArray(d.memories) ? d.memories.length : 0;
+    $('#importSummary').textContent = `Kopija: ${fmtDate(Date.parse(d.exported) || Date.now())} · noč ${Number(s.night) || 1} · ulovljeni črički: ${Number(s.eaten) || 0} · spomini: ${nm}. Uvoz zamenja trenutni napredek in dnevnik, spomine in svečko pa doda k obstoječim.`;
+    $('#importConfirm').hidden = false;
+    $('#s-import-yes').focus();
+  }).catch(() => toast('Datoteke ni bilo mogoče prebrati.'));
+}
+async function applyImport(d) {
+  load(d.save);
+  bugs.length = 0; flakes.length = 0; damp.length = 0; ghost = null;
+  if (scene !== 'tank') setScene('tank');
+  if (st.realTime) st.clock = realClock();
+  lastPhase = phase().name;
+  GS = 0.55 + 0.45 * growth(); initGecko(W * 0.46, H * 0.56, -0.5);
+  save(); updateTitle(); updateHUD(); updateSoundBtn(); renderAlbum(); renderDiary(); renderSettings();
+  try {
+    // memories: add the ones that are not here yet
+    const have = new Set(mem.entries.map(e => e.at + '|' + e.text));
+    const fresh = (Array.isArray(d.memories) ? d.memories : [])
+      .filter(m => m && typeof m.text === 'string' && m.text.trim())
+      .map(m => ({ text: m.text.slice(0, 600), at: Number(m.at) || 0 }))
+      .filter(m => !have.has(m.at + '|' + m.text));
+    if (fresh.length) {
+      if (mem.db) {
+        const mine = mem.entries.filter(x => x.who === mem.uid).map(({ id, text, at }) => ({ id, text, at }));
+        await mem.db.doc('memories/' + mem.uid).set({ entries: mine.concat(fresh.map(m => ({ id: newId(), ...m }))) });
+      } else {
+        mem.entries = mem.entries.concat(fresh.map(m => ({ id: newId(), ...m, who: 'me' }))).sort((a, b) => b.at - a.at);
+        saveLocalMemories(); renderMemories();
+      }
+    }
+    // candle: keep the larger count and the latest lighting
+    const ic = d.candle || {}, cur = myCandle();
+    const next = { count: Math.max(cur.count, Math.max(0, Number(ic.count) || 0)), last: Math.max(cur.last, Number(ic.last) || 0) };
+    if (next.count !== cur.count || next.last !== cur.last) {
+      if (mem.db) await mem.db.doc('candles/' + mem.uid).set(next);
+      else { candle.all = [{ who: 'me', ...next }]; try { localStorage.setItem(CANDLE_LOCAL, JSON.stringify(next)); } catch (e) { /* storage is optional */ } renderCandle(); }
+    }
+  } catch (err) { memErr(err, 'uvoziti'); }
+  toast('Kopija je uvožena. Lucky je spet doma.', 'good');
+}
+$('#s-export').addEventListener('click', exportBackup);
+$('#s-import').addEventListener('click', () => { $('#importFile').value = ''; $('#importFile').click(); });
+$('#importFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) readBackup(f); });
+$('#s-import-no').addEventListener('click', () => { pendingImport = null; $('#importConfirm').hidden = true; });
+$('#s-import-yes').addEventListener('click', () => { const d = pendingImport; pendingImport = null; $('#importConfirm').hidden = true; if (d) applyImport(d); });
 
 /* ---------------- sound ---------------- */
 const Snd = {

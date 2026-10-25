@@ -29,4 +29,5 @@ Različica v Claudu (zasebna, deliš jo v meniju Share): https://claude.ai/artif
 ## Kje se kaj shrani
 
 - Napredek igre in dnevnik: v brskalniku (`localStorage`).
+- Varnostna kopija: v Meniju pod Nastavitve izvoziš vse v datoteko `.json` in jo z uvozom preneseš na drugo napravo.
 - Spomini in svečke: v različici v Claudu v bazi artifacta, kjer jih vidijo vsi, s katerimi deliš igro; na spletni strani in v lokalni kopiji samo v brskalniku.
