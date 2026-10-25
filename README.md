@@ -4,9 +4,11 @@ Gecko simulator v spomin na Luckyja Snowflakea, leopardjega gekona barvne razli�
 
 ## Kako odpreš igro
 
-Odpri `index.html` v brskalniku. Igra deluje tudi brez interneta, le pisave se takrat zamenjajo s sistemskimi.
+**Igraj na spletu: https://blazerculj-max.github.io/lucky-snowflake/**
 
-Objavljena različica (zasebna, deliš jo v meniju Share): https://claude.ai/artifact/QJgFoCrq2o9zoc2QFuJMNN
+Lahko pa odpreš `index.html` v brskalniku. Igra deluje tudi brez interneta, le pisave se takrat zamenjajo s sistemskimi.
+
+Različica v Claudu (zasebna, deliš jo v meniju Share): https://claude.ai/artifact/QJgFoCrq2o9zoc2QFuJMNN
 
 ## Kako urejaš
 
@@ -27,4 +29,4 @@ Objavljena različica (zasebna, deliš jo v meniju Share): https://claude.ai/art
 ## Kje se kaj shrani
 
 - Napredek igre in dnevnik: v brskalniku (`localStorage`).
-- Spomini in svečke: v objavljeni različici v bazi artifacta, kjer jih vidijo vsi, s katerimi deliš igro; v lokalni kopiji samo v brskalniku.
+- Spomini in svečke: v različici v Claudu v bazi artifacta, kjer jih vidijo vsi, s katerimi deliš igro; na spletni strani in v lokalni kopiji samo v brskalniku.
